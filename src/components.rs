@@ -1,5 +1,7 @@
 extern crate ggez;
 use ggez::graphics::{DrawMode, Point2};
+use nalgebra::{Isometry2, Vector2};
+use nphysics2d::object::{BodyHandle, BodyStatus, RigidBody};
 use specs::prelude::*;
 
 #[derive(Debug, Component, Clone)]
@@ -7,31 +9,22 @@ use specs::prelude::*;
 pub struct PositionComponent {
   pub x: f32,
   pub y: f32,
-}
-
-impl PositionComponent {
-  pub fn to_point(&self) -> Point2 {
-    Point2::new(self.x, self.y)
-  }
-}
-
-#[derive(Component, Debug)]
-#[storage(VecStorage)]
-pub struct VelocityComponent {
-  pub x: f32,
-  pub y: f32,
-  pub r: f32,
-}
-
-#[derive(Debug, Clone)]
-pub enum Shape {
-  Circle(f32, DrawMode),
+  pub angle: f32,
 }
 
 #[derive(Component, Debug, Clone)]
 #[storage(VecStorage)]
-pub struct ShapeComponent {
-  pub variant: Shape,
+pub struct RigidBodyComponent {
+  pub handle: BodyHandle,
+}
+
+#[derive(Component, Debug, Clone)]
+#[storage(VecStorage)]
+pub struct BoundsComponent {
+  pub x_min: f32,
+  pub x_max: f32,
+  pub y_min: f32,
+  pub y_max: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -75,4 +68,16 @@ impl Default for Input {
 
 #[derive(Component, Debug, Clone)]
 #[storage(VecStorage)]
-pub struct ControllableComponent {}
+pub struct ControllableComponent;
+
+#[derive(Debug, Clone)]
+pub enum Shape {
+  Circle(Vector2<f32>, f32, DrawMode),
+  Line(Vector2<f32>, f32, f32),
+}
+
+#[derive(Component, Debug, Clone)]
+#[storage(VecStorage)]
+pub struct ShapesComponent {
+  pub shapes: Vec<Shape>,
+}
