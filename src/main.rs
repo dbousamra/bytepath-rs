@@ -44,6 +44,7 @@ impl<'a, 'b> MainState<'a, 'b> {
     specs_world.register::<RigidBodyComponent>();
     specs_world.register::<ControllableComponent>();
     specs_world.register::<BoundsComponent>();
+    specs_world.register::<FollowsEntityComponent>();
 
     let mut physics_world = PhysicsWorld::new();
     physics_world.set_gravity(Vector2::new(0.0, 0.0));
@@ -57,6 +58,11 @@ impl<'a, 'b> MainState<'a, 'b> {
       .with(PhysicsSystem, "physics_system", &[])
       .with(PositionSystem, "position_system", &["physics_system"])
       .with(BoundsSystem, "bounds_system", &["physics_system"])
+      .with(
+        FollowEntitySystem,
+        "follow_entity_system",
+        &["position_system"],
+      )
       .build();
 
     Ok(MainState {

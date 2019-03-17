@@ -81,3 +81,10 @@ pub enum Shape {
 pub struct ShapesComponent {
   pub shapes: Vec<Shape>,
 }
+
+#[derive(Component, Debug)]
+#[storage(VecStorage)]
+pub struct FollowsEntityComponent {
+  pub target: Entity,
+  pub offset: Vector2<f32>,
+}

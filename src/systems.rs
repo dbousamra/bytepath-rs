@@ -1,6 +1,6 @@
 extern crate nalgebra;
 
-use ggez::graphics::{DrawMode, Point2};
+use ggez::graphics::{DrawMode, Point2, Rect};
 use nalgebra::geometry::*;
 use nalgebra::Vector2;
 use nphysics2d::algebra::*;
@@ -39,12 +39,13 @@ impl<'a> System<'a> for BoundsSystem {
         .rigid_body_mut(rb.handle)
         .expect("Rigid body in specs does not exist in physics world");
 
-      let rb_position = body.position().translation;
+      let position = body.position().translation;
+      let angle = body.position().rotation.angle();
 
-      let clamped_x = rb_position.x.min(bounds.x_max).max(bounds.x_min);
-      let clamped_y = rb_position.y.min(bounds.y_max).max(bounds.y_min);
+      let clamped_x = position.x.min(bounds.x_max).max(bounds.x_min);
+      let clamped_y = position.y.min(bounds.y_max).max(bounds.y_min);
 
-      body.set_position(Isometry2::new(Vector2::new(clamped_x, clamped_y), 0.0));
+      body.set_position(Isometry2::new(Vector2::new(clamped_x, clamped_y), angle));
     }
   }
 }
@@ -67,6 +68,7 @@ impl<'a> System<'a> for PositionSystem {
       let rb_position = body.position().translation;
       position.x = rb_position.x;
       position.y = rb_position.y;
+      // position.angle = rb.angle;
     }
   }
 }
@@ -91,8 +93,7 @@ impl<'a> System<'a> for RenderingSystem<'a> {
             graphics::circle(self.ctx, *mode, point, *radius, 0.1).unwrap()
           }
           Shape::Line(offset, length, thickness) => {
-            let pos = Vector2::new(position.x, position.y) + offset;
-            let p1 = Point2::new(pos.x, pos.y);
+            let p1 = Point2::new(position.x, position.y);
             let p2 = Point2::new(p1.x + 5.0, p1.y + 5.0);
             graphics::line(self.ctx, &[p1, p2], *thickness).unwrap();
           }
@@ -114,26 +115,41 @@ impl<'a> System<'a> for ControllableSystem {
 
   fn run(&mut self, (input, mut physics_world, mut rb, ctrled): Self::SystemData) {
     (&mut rb, &ctrled).join().for_each(|(rb, _ctrled)| {
-      let timestep = physics_world.timestep();
-      let rv = std::f32::consts::PI * 1.66;
-
       let body: &mut RigidBody<f32> = physics_world
         .rigid_body_mut(rb.handle)
         .expect("Rigid body in specs does not exist in physics world");
 
-      let v = body.velocity().as_vector().norm();
+      let pos = body.position().translation;
+      let angle = body.position().rotation.angle();
+      let v = 200.0;
 
-      if input.left {
-        rb.angle = rb.angle - (rv * timestep * 40.0);
+      let new_angle = if input.left {
+        angle - 0.05
       } else if input.right {
-        rb.angle = rb.angle + (rv * timestep * 40.0);
-      }
+        angle + 0.05
+      } else {
+        angle
+      };
 
-      let angle_in_radian = rb.angle / 180.0 * std::f32::consts::PI;
-      body.set_linear_velocity(Vector2::new(
-        angle_in_radian.sin() * v,
-        angle_in_radian.cos() * v,
-      ));
+      body.set_position(Isometry2::new(Vector2::new(pos.x, pos.y), new_angle));
+      body.set_linear_velocity(Vector2::new(new_angle.sin() * v, new_angle.cos() * v));
     });
+  }
+}
+
+pub struct FollowEntitySystem;
+
+impl<'a> System<'a> for FollowEntitySystem {
+  type SystemData = (
+    Entities<'a>,
+    ReadStorage<'a, FollowsEntityComponent>,
+    WriteStorage<'a, PositionComponent>,
+  );
+
+  fn run(&mut self, (entity, follows, mut position): Self::SystemData) {
+    for (entity, follows) in (&entity, &follows).join() {
+      let new_position: PositionComponent = position.get(follows.target).cloned().unwrap();
+      *position.get_mut(entity).unwrap() = new_position;
+    }
   }
 }
