@@ -26,7 +26,6 @@ use systems::*;
 extern crate specs_derive;
 
 struct MainState<'a, 'b> {
-  physics_world: PhysicsWorld,
   specs_world: World,
   dispatcher: Dispatcher<'a, 'b>,
   width: u32,
@@ -35,21 +34,29 @@ struct MainState<'a, 'b> {
 
 impl<'a, 'b> MainState<'a, 'b> {
   fn new(ctx: &mut Context, width: u32, height: u32) -> GameResult<MainState<'a, 'b>> {
+    let mut specs_world = World::new();
+
     let mut physics_world = PhysicsWorld::new();
     physics_world.set_gravity(Vector2::new(0.0, 0.0));
     physics_world.set_contact_model(SignoriniModel::new());
 
-    let mut specs_world = World::new();
+    specs_world.add_resource(physics_world);
     specs_world.add_resource(Input::new());
-    specs_world.register::<MeshComponent>();
-    specs_world.register::<Position>();
+    specs_world.add_resource(UpdateTime(0.0));
 
-    let dispatcher = DispatcherBuilder::new().build();
+    specs_world.register::<ControllableComponent>();
+    specs_world.register::<MeshComponent>();
+    specs_world.register::<PositionComponent>();
+    specs_world.register::<RigidBodyComponent>();
+
+    let dispatcher = DispatcherBuilder::new()
+      .with(PhysicsSystem, "physics_system", &[])
+      .with(PositionSystem, "position_system", &["physics_system"])
+      .build();
 
     entities::create_player(ctx, &mut specs_world);
 
     Ok(MainState {
-      physics_world,
       specs_world,
       dispatcher,
       width,
@@ -67,7 +74,11 @@ impl<'a, 'b> event::EventHandler for MainState<'a, 'b> {
       println!("Average FPS: {}", timer::get_fps(ctx));
     }
 
+    self.specs_world.write_resource::<UpdateTime>().0 = dt_seconds;
+    self.specs_world.write_resource::<PhysicsWorld>();
+    self.specs_world.write_resource::<ControllableSystem>();
     self.dispatcher.dispatch(&mut self.specs_world.res);
+    self.specs_world.maintain();
 
     Ok(())
   }
