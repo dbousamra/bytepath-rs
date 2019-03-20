@@ -12,3 +12,4 @@ rand = "0.6.5"
 nphysics2d = "0.10.3"
 ncollide2d = "0.18.3"
 nalgebra = "0.17.2"
+uuid = { version = "0.7", features = ["v4"] }

@@ -9,96 +9,137 @@ use ggez::*;
 use ggez::{Context, GameResult};
 
 use nalgebra::Vector2;
+use nphysics2d::solver::SignoriniModel;
 use specs::prelude::*;
 use specs::{RunNow, World};
 
-mod components;
 mod entities;
 mod resources;
-mod systems;
 
-use components::*;
 use entities::*;
 use resources::*;
-use systems::*;
 
 #[macro_use]
 extern crate specs_derive;
 
-struct Systems {
-  physics: PhysicsSystem,
-  controllable: ControllableSystem,
+struct MainState {
+  physics_world: PhysicsWorld,
+  width: u32,
+  height: u32,
+  input: Input,
+  player: Player,
+  projectiles: Vec<Projectile>,
+  effects: Vec<Effect>,
 }
 
-struct MainState<'a, 'b> {
-  specs_world: World,
-  dispatcher: Dispatcher<'a, 'b>,
-}
-
-impl<'a, 'b> MainState<'a, 'b> {
-  fn new(_ctx: &mut Context) -> GameResult<MainState<'a, 'b>> {
-    let mut specs_world = World::new();
-    specs_world.add_resource(Input::new());
-    specs_world.register::<PositionComponent>();
-    specs_world.register::<ShapesComponent>();
-    specs_world.register::<RigidBodyComponent>();
-    specs_world.register::<ControllableComponent>();
-    specs_world.register::<BoundsComponent>();
-    specs_world.register::<FollowsEntityComponent>();
-
+impl MainState {
+  fn new(_ctx: &mut Context, width: u32, height: u32) -> GameResult<MainState> {
     let mut physics_world = PhysicsWorld::new();
     physics_world.set_gravity(Vector2::new(0.0, 0.0));
-    specs_world.add_resource(physics_world);
-    specs_world.add_resource(UpdateTime(0.0));
+    physics_world.set_contact_model(SignoriniModel::new());
 
-    create_player(_ctx, &mut specs_world, WIDTH as f32, HEIGHT as f32);
+    let input = Input::default();
 
-    let dispatcher: Dispatcher<'a, 'b> = DispatcherBuilder::new()
-      .with(ControllableSystem, "controlable", &[])
-      .with(PhysicsSystem, "physics_system", &[])
-      .with(PositionSystem, "position_system", &["physics_system"])
-      .with(BoundsSystem, "bounds_system", &["physics_system"])
-      .with(
-        FollowEntitySystem,
-        "follow_entity_system",
-        &["position_system"],
-      )
-      .build();
+    let player = Player::new(&mut physics_world, width, height);
+
+    let projectiles = Vec::new();
+    let effects = Vec::new();
 
     Ok(MainState {
-      specs_world: specs_world,
-      dispatcher: dispatcher,
+      physics_world,
+      width,
+      height,
+      input,
+      player,
+      projectiles,
+      effects,
     })
+  }
+
+  fn process_action(&mut self, _ctx: &mut Context, action: GameAction) {
+    match action {
+      GameAction::CreateProjectile { projectile } => self.projectiles.push(projectile),
+      GameAction::CreateEffect { effect } => self.effects.push(effect),
+      GameAction::DestroyEffect { id } => self.effects.retain(|effect| id != effect.id),
+      GameAction::DestroyProjectile { id } => {
+        for projectile in self.projectiles.iter() {
+          if projectile.id == id {
+            self
+              .physics_world
+              .remove_bodies(&[projectile.rigid_body_handle]);
+          }
+        }
+
+        self.projectiles.retain(|projectile| id != projectile.id)
+      }
+      GameAction::Nothing => (),
+    }
+  }
+
+  fn check_bounds(&self) -> Vec<GameAction> {
+    let mut actions: Vec<GameAction> = Vec::new();
+
+    for projectile in self.projectiles.iter() {
+      let out_of_x_bounds = projectile.x < 0.0 || projectile.x > self.width as f32;
+      let out_of_y_bounds = projectile.y < 0.0 || projectile.y > self.height as f32;
+
+      if out_of_x_bounds || out_of_y_bounds {
+        actions.push(GameAction::DestroyProjectile { id: projectile.id })
+      }
+    }
+
+    actions
   }
 }
 
-const WIDTH: u32 = 800;
-const HEIGHT: u32 = 600;
-
-impl<'a, 'b> event::EventHandler for MainState<'a, 'b> {
+impl event::EventHandler for MainState {
   fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
     let dt = timer::get_delta(ctx);
-    let seconds = dt.subsec_nanos() as f32 / 1_000_000_000.0;
+    let dt_seconds = dt.subsec_nanos() as f32 / 1_000_000_000.0;
 
     if timer::get_ticks(ctx) % 100 == 0 {
       println!("Average FPS: {}", timer::get_fps(ctx));
     }
 
-    self.specs_world.write_resource::<UpdateTime>().0 = seconds;
-    self.specs_world.write_resource::<PhysicsWorld>();
+    let mut actions: Vec<GameAction> = Vec::new();
 
-    self.dispatcher.dispatch(&mut self.specs_world.res);
-    self.specs_world.maintain();
+    actions.extend(
+      self
+        .player
+        .update(ctx, dt_seconds, &mut self.physics_world, &self.input),
+    );
+
+    for projectile in self.projectiles.iter_mut() {
+      actions.extend(projectile.update(ctx, &mut self.physics_world))
+    }
+
+    for effect in self.effects.iter_mut() {
+      actions.extend(effect.update(ctx, dt_seconds))
+    }
+
+    actions.extend(self.check_bounds());
+
+    for action in actions {
+      self.process_action(ctx, action);
+    }
+    self.physics_world.set_timestep(dt_seconds);
+    self.physics_world.step();
 
     Ok(())
   }
 
   fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
     graphics::clear(ctx);
-    {
-      let mut rs = RenderingSystem { ctx };
-      rs.run_now(&self.specs_world.res);
+    self.player.draw(ctx);
+
+    for projectile in self.projectiles.iter_mut() {
+      projectile.draw(ctx);
     }
+
+    for effect in self.effects.iter_mut() {
+      effect.draw(ctx);
+    }
+
     graphics::present(ctx);
     Ok(())
   }
@@ -110,29 +151,26 @@ impl<'a, 'b> event::EventHandler for MainState<'a, 'b> {
     _keymod: Mod,
     repeat: bool,
   ) {
-    let mut input = self.specs_world.write_resource::<Input>();
     if !repeat {
       match keycode {
-        Keycode::Left => input.left = false,
-        Keycode::Right => input.right = false,
-        Keycode::Up => input.up = false,
-        Keycode::Down => input.down = false,
+        Keycode::Left => self.input.left = false,
+        Keycode::Right => self.input.right = false,
+        Keycode::Up => self.input.up = false,
+        Keycode::Down => self.input.down = false,
+        Keycode::Space => self.input.attack = false,
         _ => (),
       }
     }
   }
 
   fn key_down_event(&mut self, _ctx: &mut Context, keycode: Keycode, _keymod: Mod, repeat: bool) {
-    let mut input = self.specs_world.write_resource::<Input>();
     if !repeat {
       match keycode {
-        Keycode::Left => input.left = true,
-        Keycode::Right => input.right = true,
-        Keycode::Up => input.up = true,
-        Keycode::Down => input.down = true,
-        Keycode::LCtrl => input.slide = true,
-        Keycode::Space => input.jump = true,
-        Keycode::LShift => input.attack = true,
+        Keycode::Left => self.input.left = true,
+        Keycode::Right => self.input.right = true,
+        Keycode::Up => self.input.up = true,
+        Keycode::Down => self.input.down = true,
+        Keycode::Space => self.input.attack = true,
         _ => (),
       }
     }
@@ -140,9 +178,12 @@ impl<'a, 'b> event::EventHandler for MainState<'a, 'b> {
 }
 
 fn main() {
+  let width = 800;
+  let height = 600;
+
   let window_mode = ggez::conf::WindowMode {
-    width: WIDTH,
-    height: HEIGHT,
+    width: width,
+    height: height,
     borderless: false,
     fullscreen_type: ggez::conf::FullscreenType::Off,
     vsync: true,
@@ -155,7 +196,7 @@ fn main() {
   let cb = ggez::ContextBuilder::new("bytepath", "ggez").window_mode(window_mode);
   let ctx = &mut cb.build().unwrap();
 
-  match MainState::new(ctx) {
+  match MainState::new(ctx, width, height) {
     Ok(ref mut game) => {
       let result = event::run(ctx, game);
       if let Err(e) = result {
