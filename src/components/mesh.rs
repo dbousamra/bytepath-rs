@@ -1,11 +1,12 @@
 use specs::{Component, VecStorage};
 
+use ggez::graphics::Mesh;
+
 #[derive(Debug)]
-pub struct Mesh {
-  pub x: f32,
-  pub y: f32,
+pub struct MeshComponent {
+  pub mesh: Mesh,
 }
 
-impl Component for Mesh {
+impl Component for MeshComponent {
   type Storage = VecStorage<Self>;
 }

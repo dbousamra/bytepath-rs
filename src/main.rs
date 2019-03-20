@@ -34,24 +34,19 @@ struct MainState<'a, 'b> {
 }
 
 impl<'a, 'b> MainState<'a, 'b> {
-  fn new(_ctx: &mut Context, width: u32, height: u32) -> GameResult<MainState<'a, 'b>> {
+  fn new(ctx: &mut Context, width: u32, height: u32) -> GameResult<MainState<'a, 'b>> {
     let mut physics_world = PhysicsWorld::new();
     physics_world.set_gravity(Vector2::new(0.0, 0.0));
     physics_world.set_contact_model(SignoriniModel::new());
 
     let mut specs_world = World::new();
     specs_world.add_resource(Input::new());
-    specs_world.register::<Mesh>();
+    specs_world.register::<MeshComponent>();
     specs_world.register::<Position>();
 
-    let dispatcher = DispatcherBuilder::new()
-      .with(RenderingSystem, "rendering_system", &[])
-      .build();
+    let dispatcher = DispatcherBuilder::new().build();
 
-    specs_world
-      .create_entity()
-      .with(Mesh { x: 4.0, y: 7.0 })
-      .build();
+    entities::create_player(ctx, &mut specs_world);
 
     Ok(MainState {
       physics_world,
@@ -79,6 +74,12 @@ impl<'a, 'b> event::EventHandler for MainState<'a, 'b> {
 
   fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
     graphics::clear(ctx);
+
+    {
+      let mut rs = RenderingSystem { ctx };
+      rs.run_now(&self.specs_world.res);
+    }
+
     graphics::present(ctx);
     Ok(())
   }
