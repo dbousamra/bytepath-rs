@@ -13,86 +13,57 @@ use nphysics2d::solver::SignoriniModel;
 use specs::prelude::*;
 use specs::{RunNow, World};
 
+mod components;
 mod entities;
 mod resources;
+mod systems;
 
-use entities::*;
+use components::*;
 use resources::*;
+use systems::*;
 
 #[macro_use]
 extern crate specs_derive;
 
-struct MainState {
+struct MainState<'a, 'b> {
   physics_world: PhysicsWorld,
+  specs_world: World,
+  dispatcher: Dispatcher<'a, 'b>,
   width: u32,
   height: u32,
-  input: Input,
-  player: Player,
-  projectiles: Vec<Projectile>,
-  effects: Vec<Effect>,
 }
 
-impl MainState {
-  fn new(_ctx: &mut Context, width: u32, height: u32) -> GameResult<MainState> {
+impl<'a, 'b> MainState<'a, 'b> {
+  fn new(_ctx: &mut Context, width: u32, height: u32) -> GameResult<MainState<'a, 'b>> {
     let mut physics_world = PhysicsWorld::new();
     physics_world.set_gravity(Vector2::new(0.0, 0.0));
     physics_world.set_contact_model(SignoriniModel::new());
 
-    let input = Input::default();
+    let mut specs_world = World::new();
+    specs_world.add_resource(Input::new());
+    specs_world.register::<Mesh>();
+    specs_world.register::<Position>();
 
-    let player = Player::new(&mut physics_world, width, height);
+    let dispatcher = DispatcherBuilder::new()
+      .with(RenderingSystem, "rendering_system", &[])
+      .build();
 
-    let projectiles = Vec::new();
-    let effects = Vec::new();
+    specs_world
+      .create_entity()
+      .with(Mesh { x: 4.0, y: 7.0 })
+      .build();
 
     Ok(MainState {
       physics_world,
+      specs_world,
+      dispatcher,
       width,
       height,
-      input,
-      player,
-      projectiles,
-      effects,
     })
-  }
-
-  fn process_action(&mut self, _ctx: &mut Context, action: GameAction) {
-    match action {
-      GameAction::CreateProjectile { projectile } => self.projectiles.push(projectile),
-      GameAction::CreateEffect { effect } => self.effects.push(effect),
-      GameAction::DestroyEffect { id } => self.effects.retain(|effect| id != effect.id),
-      GameAction::DestroyProjectile { id } => {
-        for projectile in self.projectiles.iter() {
-          if projectile.id == id {
-            self
-              .physics_world
-              .remove_bodies(&[projectile.rigid_body_handle]);
-          }
-        }
-
-        self.projectiles.retain(|projectile| id != projectile.id)
-      }
-      GameAction::Nothing => (),
-    }
-  }
-
-  fn check_bounds(&self) -> Vec<GameAction> {
-    let mut actions: Vec<GameAction> = Vec::new();
-
-    for projectile in self.projectiles.iter() {
-      let out_of_x_bounds = projectile.x < 0.0 || projectile.x > self.width as f32;
-      let out_of_y_bounds = projectile.y < 0.0 || projectile.y > self.height as f32;
-
-      if out_of_x_bounds || out_of_y_bounds {
-        actions.push(GameAction::DestroyProjectile { id: projectile.id })
-      }
-    }
-
-    actions
   }
 }
 
-impl event::EventHandler for MainState {
+impl<'a, 'b> event::EventHandler for MainState<'a, 'b> {
   fn update(&mut self, ctx: &mut Context) -> GameResult<()> {
     let dt = timer::get_delta(ctx);
     let dt_seconds = dt.subsec_nanos() as f32 / 1_000_000_000.0;
@@ -101,45 +72,13 @@ impl event::EventHandler for MainState {
       println!("Average FPS: {}", timer::get_fps(ctx));
     }
 
-    let mut actions: Vec<GameAction> = Vec::new();
-
-    actions.extend(
-      self
-        .player
-        .update(ctx, dt_seconds, &mut self.physics_world, &self.input),
-    );
-
-    for projectile in self.projectiles.iter_mut() {
-      actions.extend(projectile.update(ctx, &mut self.physics_world))
-    }
-
-    for effect in self.effects.iter_mut() {
-      actions.extend(effect.update(ctx, dt_seconds))
-    }
-
-    actions.extend(self.check_bounds());
-
-    for action in actions {
-      self.process_action(ctx, action);
-    }
-    self.physics_world.set_timestep(dt_seconds);
-    self.physics_world.step();
+    self.dispatcher.dispatch(&mut self.specs_world.res);
 
     Ok(())
   }
 
   fn draw(&mut self, ctx: &mut Context) -> GameResult<()> {
     graphics::clear(ctx);
-    self.player.draw(ctx);
-
-    for projectile in self.projectiles.iter_mut() {
-      projectile.draw(ctx);
-    }
-
-    for effect in self.effects.iter_mut() {
-      effect.draw(ctx);
-    }
-
     graphics::present(ctx);
     Ok(())
   }
@@ -151,26 +90,30 @@ impl event::EventHandler for MainState {
     _keymod: Mod,
     repeat: bool,
   ) {
+    let mut input = self.specs_world.write_resource::<Input>();
+
     if !repeat {
       match keycode {
-        Keycode::Left => self.input.left = false,
-        Keycode::Right => self.input.right = false,
-        Keycode::Up => self.input.up = false,
-        Keycode::Down => self.input.down = false,
-        Keycode::Space => self.input.attack = false,
+        Keycode::Left => input.left = false,
+        Keycode::Right => input.right = false,
+        Keycode::Up => input.up = false,
+        Keycode::Down => input.down = false,
+        Keycode::Space => input.attack = false,
         _ => (),
       }
     }
   }
 
   fn key_down_event(&mut self, _ctx: &mut Context, keycode: Keycode, _keymod: Mod, repeat: bool) {
+    let mut input = self.specs_world.write_resource::<Input>();
+
     if !repeat {
       match keycode {
-        Keycode::Left => self.input.left = true,
-        Keycode::Right => self.input.right = true,
-        Keycode::Up => self.input.up = true,
-        Keycode::Down => self.input.down = true,
-        Keycode::Space => self.input.attack = true,
+        Keycode::Left => input.left = true,
+        Keycode::Right => input.right = true,
+        Keycode::Up => input.up = true,
+        Keycode::Down => input.down = true,
+        Keycode::Space => input.attack = true,
         _ => (),
       }
     }
@@ -193,21 +136,11 @@ fn main() {
     max_height: 0,
   };
 
-  let cb = ggez::ContextBuilder::new("bytepath", "ggez").window_mode(window_mode);
-  let ctx = &mut cb.build().unwrap();
+  let ctx = &mut ggez::ContextBuilder::new("bytepath", "ggez")
+    .window_mode(window_mode)
+    .build()
+    .unwrap();
 
-  match MainState::new(ctx, width, height) {
-    Ok(ref mut game) => {
-      let result = event::run(ctx, game);
-      if let Err(e) = result {
-        println!("Error encountered running game: {}", e);
-      } else {
-        println!("Game exited cleanly.");
-      }
-    }
-    Err(e) => {
-      println!("Could not load game!");
-      println!("Error: {}", e);
-    }
-  }
+  let mut state = MainState::new(ctx, width, height).unwrap();
+  event::run(ctx, &mut state).unwrap();
 }
