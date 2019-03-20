@@ -34,8 +34,8 @@ pub fn create_rigid_body(
 pub fn create_player(ctx: &mut Context, specs_world: &mut World) -> Entity {
   let x = 400.0;
   let y = 300.0;
-  let velocity = 100.0;
-  let angle = 0.0;
+  let velocity = 20.0;
+  let angle = 0.5;
   let radius = 20.0;
 
   let rigid_body_handle = create_rigid_body(specs_world, x, y, velocity, angle, radius);
@@ -43,7 +43,7 @@ pub fn create_player(ctx: &mut Context, specs_world: &mut World) -> Entity {
     handle: rigid_body_handle,
   };
 
-  let position_component = PositionComponent { x: 400.0, y: 300.0 };
+  let position_component = PositionComponent { x, y, angle };
 
   let mesh = ggez::graphics::MeshBuilder::new()
     .polygon(

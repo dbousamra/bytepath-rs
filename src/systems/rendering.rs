@@ -16,9 +16,13 @@ impl<'a> System<'a> for RenderingSystem<'a> {
   fn run(&mut self, (mesh, position): Self::SystemData) {
     use specs::Join;
     for (mesh, position) in (&mesh, &position).join() {
-      let dest = ggez::graphics::Point2::new(position.x, position.y);
-      let rotation = 0.0;
-      ggez::graphics::draw(self.ctx, &mesh.mesh, dest, rotation).unwrap()
+      ggez::graphics::draw(
+        self.ctx,
+        &mesh.mesh,
+        ggez::graphics::Point2::new(position.x, position.y),
+        position.angle,
+      )
+      .unwrap()
     }
   }
 }

@@ -52,6 +52,11 @@ impl<'a, 'b> MainState<'a, 'b> {
     let dispatcher = DispatcherBuilder::new()
       .with(PhysicsSystem, "physics_system", &[])
       .with(PositionSystem, "position_system", &["physics_system"])
+      .with(
+        ControllableSystem,
+        "controllable_system",
+        &["physics_system"],
+      )
       .build();
 
     entities::create_player(ctx, &mut specs_world);
@@ -76,7 +81,6 @@ impl<'a, 'b> event::EventHandler for MainState<'a, 'b> {
 
     self.specs_world.write_resource::<UpdateTime>().0 = dt_seconds;
     self.specs_world.write_resource::<PhysicsWorld>();
-    self.specs_world.write_resource::<ControllableSystem>();
     self.dispatcher.dispatch(&mut self.specs_world.res);
     self.specs_world.maintain();
 

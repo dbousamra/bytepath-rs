@@ -1,5 +1,7 @@
-use nphysics2d::object::{BodyHandle, RigidBody};
 use specs::*;
+
+use nalgebra::{Isometry2, Vector2};
+use nphysics2d::object::{BodyHandle, RigidBody};
 
 use crate::components::*;
 use crate::resources::*;
@@ -16,26 +18,24 @@ impl<'a> System<'a> for ControllableSystem {
 
   fn run(&mut self, (input, mut physics_world, mut rb, ctrled): Self::SystemData) {
     (&mut rb, &ctrled).join().for_each(|(rb, _ctrled)| {
-      let timestep = physics_world.timestep();
-      let rv = std::f32::consts::PI * 1.66;
-
       let body: &mut RigidBody<f32> = physics_world
         .rigid_body_mut(rb.handle)
         .expect("Rigid body in specs does not exist in physics world");
 
-      let v = body.velocity().as_vector().norm();
+      let pos = body.position().translation;
+      let angle = body.position().rotation.angle();
+      let v = 200.0;
 
-      if input.left {
-        rb.angle = rb.angle - (rv * timestep * 40.0);
+      let new_angle = if input.left {
+        angle - 0.05
       } else if input.right {
-        rb.angle = rb.angle + (rv * timestep * 40.0);
-      }
+        angle + 0.05
+      } else {
+        angle
+      };
 
-      let angle_in_radian = rb.angle / 180.0 * std::f32::consts::PI;
-      body.set_linear_velocity(Vector2::new(
-        angle_in_radian.sin() * v,
-        angle_in_radian.cos() * v,
-      ));
+      body.set_position(Isometry2::new(Vector2::new(pos.x, pos.y), new_angle));
+      body.set_linear_velocity(Vector2::new(new_angle.cos() * v, new_angle.sin() * v));
     });
   }
 }
