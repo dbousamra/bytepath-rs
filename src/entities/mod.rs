@@ -1,94 +1,205 @@
 use crate::components::*;
 use crate::resources::*;
+use crate::utils::*;
 
+use core::ops::{Deref, DerefMut};
+use ggez::graphics;
 use ggez::Context;
 use nalgebra::{Isometry2, Vector2};
 use ncollide2d::shape::{Ball, ShapeHandle};
 use nphysics2d::math::Velocity;
 use nphysics2d::object::{BodyHandle, BodyStatus, ColliderDesc, RigidBodyDesc};
-use specs::world::Builder;
-use specs::{Entity, World};
+use specs::world::*;
+use specs::*;
+use std::time::{Duration, Instant};
 
-pub fn create_rigid_body(
-  specs_world: &mut World,
-  x: f32,
-  y: f32,
-  velocity: f32,
-  angle: f32,
-  radius: f32,
-) -> BodyHandle {
-  let mut physics_world = specs_world.write_resource::<PhysicsWorld>();
+pub fn create_player(
+  _ctx: &mut Context,
+  entities: &EntitiesRes,
+  lazy: &LazyUpdate,
+  game_settings: &GameSettings,
+  physics_world: &mut PhysicsWorld,
+) -> Entity {
+  let x = game_settings.width as f32 / 2.0;
+  let y = game_settings.height as f32 / 2.0;
+  let velocity = 0.0;
+  let angle = 0.5;
+  let size = 25.0;
 
-  let cuboid = ShapeHandle::new(Ball::new(radius));
+  let cuboid = ShapeHandle::new(Ball::new(size));
   let collider_desc = ColliderDesc::new(cuboid);
-
-  RigidBodyDesc::new()
+  let rigid_body_handle = RigidBodyDesc::new()
     .collider(&collider_desc)
-    .position(Isometry2::new(Vector2::new(x, y as f32), angle))
+    .position(Isometry2::new(Vector2::new(x, y), angle))
     .velocity(Velocity::linear(velocity, 0.0))
     .status(BodyStatus::Dynamic)
-    .build(&mut physics_world)
-    .handle()
-}
+    .build(physics_world)
+    .handle();
 
-pub fn create_player(ctx: &mut Context, specs_world: &mut World) -> Entity {
-  let x = 400.0;
-  let y = 300.0;
-  let velocity = 20.0;
-  let angle = 0.5;
-  let radius = 20.0;
-
-  let rigid_body_handle = create_rigid_body(specs_world, x, y, velocity, angle, radius);
   let rigid_body_component = RigidBodyComponent {
     handle: rigid_body_handle,
   };
 
   let position_component = PositionComponent { x, y, angle };
 
-  let mesh = ggez::graphics::MeshBuilder::new()
+  let mesh = graphics::MeshBuilder::new()
     .polygon(
-      ggez::graphics::DrawMode::Line(1.0),
+      graphics::DrawMode::Line(1.0),
       &[
-        ggez::graphics::Point2::new(radius, 0.0),
-        ggez::graphics::Point2::new(radius / 2.0, -radius / 2.0),
-        ggez::graphics::Point2::new(-radius / 2.0, -radius / 2.0),
-        ggez::graphics::Point2::new(-radius, 0.0),
-        ggez::graphics::Point2::new(-radius / 2.0, radius / 2.0),
-        ggez::graphics::Point2::new(radius / 2.0, radius / 2.0),
+        graphics::Point2::new(size, 0.0),
+        graphics::Point2::new(size / 2.0, -size / 2.0),
+        graphics::Point2::new(-size / 2.0, -size / 2.0),
+        graphics::Point2::new(-size, 0.0),
+        graphics::Point2::new(-size / 2.0, size / 2.0),
+        graphics::Point2::new(size / 2.0, size / 2.0),
       ],
     )
     .polygon(
-      ggez::graphics::DrawMode::Line(1.0),
+      graphics::DrawMode::Line(1.0),
       &[
-        ggez::graphics::Point2::new(radius / 2.0, -radius / 2.0),
-        ggez::graphics::Point2::new(0.0, -radius),
-        ggez::graphics::Point2::new(-radius - radius / 2.0, -radius),
-        ggez::graphics::Point2::new(-3.0 * radius / 4.0, -radius / 4.0),
-        ggez::graphics::Point2::new(-radius / 2.0, -radius / 2.0),
+        graphics::Point2::new(size / 2.0, -size / 2.0),
+        graphics::Point2::new(0.0, -size),
+        graphics::Point2::new(-size - size / 2.0, -size),
+        graphics::Point2::new(-3.0 * size / 4.0, -size / 4.0),
+        graphics::Point2::new(-size / 2.0, -size / 2.0),
       ],
     )
     .polygon(
-      ggez::graphics::DrawMode::Line(1.0),
+      graphics::DrawMode::Line(1.0),
       &[
-        ggez::graphics::Point2::new(radius / 2.0, radius / 2.0),
-        ggez::graphics::Point2::new(-radius / 2.0, radius / 2.0),
-        ggez::graphics::Point2::new(-3.0 * radius / 4.0, radius / 4.0),
-        ggez::graphics::Point2::new(-radius - radius / 2.0, radius),
-        ggez::graphics::Point2::new(0.0, radius),
+        graphics::Point2::new(size / 2.0, size / 2.0),
+        graphics::Point2::new(-size / 2.0, size / 2.0),
+        graphics::Point2::new(-3.0 * size / 4.0, size / 4.0),
+        graphics::Point2::new(-size - size / 2.0, size),
+        graphics::Point2::new(0.0, size),
       ],
     )
-    .build(ctx)
-    .unwrap();
+    .clone();
 
-  let mesh_component = MeshComponent { mesh };
+  let draw_param = graphics::DrawParam::default();
+
+  let mesh_component = MeshComponent { mesh, draw_param };
 
   let controllable_component = ControllableComponent;
 
-  specs_world
-    .create_entity()
-    .with(mesh_component)
-    .with(position_component)
-    .with(rigid_body_component)
-    .with(controllable_component)
-    .build()
+  let shooting_component = ShootingComponent {
+    every: Duration::from_millis(250),
+    last_shot_at: Instant::now(),
+  };
+
+  let garbage_component = GarbageComponent::default();
+
+  LazyBuilder {
+    entity: entities.create(),
+    lazy: lazy,
+  }
+  .with(position_component)
+  .with(mesh_component)
+  .with(rigid_body_component)
+  .with(controllable_component)
+  .with(shooting_component)
+  .with(garbage_component)
+  .build()
+}
+
+pub fn create_projectile(
+  entities: &EntitiesRes,
+  lazy: &LazyUpdate,
+  settings: &GameSettings,
+  physics_world: &mut PhysicsWorld,
+  position_component: PositionComponent,
+) -> Entity {
+  let x = position_component.x;
+  let y = position_component.y;
+  let angle = position_component.angle;
+  let velocity = 500.0;
+
+  let radius = 4.0;
+  let tolerance = 0.1;
+  let thickness = 1.0;
+
+  let cuboid = ShapeHandle::new(Ball::new(radius));
+  let collider_desc = ColliderDesc::new(cuboid);
+  let rigid_body = RigidBodyDesc::new()
+    .collider(&collider_desc)
+    .position(Isometry2::new(Vector2::new(x, y), angle))
+    .status(BodyStatus::Dynamic)
+    .build(physics_world);
+
+  rigid_body.set_linear_velocity(Vector2::new(angle.cos() * velocity, angle.sin() * velocity));
+
+  let rigid_body_component = RigidBodyComponent {
+    handle: rigid_body.handle(),
+  };
+
+  let mesh = graphics::MeshBuilder::new()
+    .circle(
+      graphics::DrawMode::Line(thickness),
+      graphics::Point2::origin(),
+      radius,
+      tolerance,
+    )
+    .clone();
+
+  let draw_param = graphics::DrawParam::default();
+
+  let mesh_component = MeshComponent { mesh, draw_param };
+
+  let garbage_component = GarbageComponent::default();
+
+  let bounds_component = BoundsComponent {
+    x_min: 0,
+    x_max: settings.width,
+    y_min: 0,
+    y_max: settings.height,
+  };
+
+  let explode_bounds_component = ExplodeBoundsComponent;
+
+  LazyBuilder {
+    entity: entities.create(),
+    lazy: lazy,
+  }
+  .with(position_component)
+  .with(mesh_component)
+  .with(rigid_body_component)
+  .with(garbage_component)
+  .with(bounds_component)
+  .with(explode_bounds_component)
+  .build()
+}
+
+pub fn create_out_of_bounds_explosion(
+  entities: &EntitiesRes,
+  lazy: &LazyUpdate,
+  position_component: PositionComponent,
+) -> Entity {
+  let line_width = 20.0;
+  let rect = graphics::Rect::new(-line_width / 2.0, -line_width / 2.0, line_width, line_width);
+  let mesh = graphics::MeshBuilder::new()
+    .polygon(graphics::DrawMode::Fill, &rect_to_polygon(rect))
+    .clone();
+
+  let draw_param = graphics::DrawParam {
+    color: Some(HP_COLOR()),
+    ..Default::default()
+  };
+
+  let mesh_component = MeshComponent { mesh, draw_param };
+
+  let lifetime_component = LifetimeComponent {
+    duration: Duration::from_millis(250),
+  };;
+
+  let garbage_component = GarbageComponent::default();
+
+  LazyBuilder {
+    entity: entities.create(),
+    lazy: lazy,
+  }
+  .with(position_component)
+  .with(mesh_component)
+  .with(lifetime_component)
+  .with(garbage_component)
+  .build()
 }

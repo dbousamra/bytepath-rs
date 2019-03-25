@@ -1,7 +1,9 @@
 use nphysics2d::world::World;
 
+use std::time::Duration;
+
 #[derive(Debug, Default)]
-pub struct UpdateTime(pub f32);
+pub struct UpdateTime(pub Duration);
 
 pub type PhysicsWorld = World<f32>;
 
@@ -13,8 +15,8 @@ pub struct Input {
   pub attack: bool,
 }
 
-impl Input {
-  pub fn new() -> Input {
+impl Default for Input {
+  fn default() -> Input {
     Input {
       up: false,
       down: false,
@@ -25,8 +27,18 @@ impl Input {
   }
 }
 
-impl Default for Input {
-  fn default() -> Input {
-    Input::new()
+pub struct GameSettings {
+  pub width: u32,
+  pub height: u32,
+  pub scale: u32,
+}
+
+impl Default for GameSettings {
+  fn default() -> GameSettings {
+    GameSettings {
+      width: 1920,
+      height: 1080,
+      scale: 4,
+    }
   }
 }

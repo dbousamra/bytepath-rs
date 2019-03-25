@@ -24,7 +24,7 @@ impl<'a> System<'a> for ControllableSystem {
 
       let pos = body.position().translation;
       let angle = body.position().rotation.angle();
-      let v = 200.0;
+      let v = 250.0;
 
       let new_angle = if input.left {
         angle - 0.05

@@ -1,10 +1,11 @@
 use specs::{Component, VecStorage};
 
-use ggez::graphics::Mesh;
+use ggez::graphics::{DrawParam, MeshBuilder};
 
 #[derive(Debug)]
 pub struct MeshComponent {
-  pub mesh: Mesh,
+  pub mesh: MeshBuilder,
+  pub draw_param: DrawParam,
 }
 
 impl Component for MeshComponent {

@@ -1,9 +1,19 @@
+pub mod bounds;
 pub mod controllable;
+pub mod explode_bounds;
+pub mod garbage;
+pub mod lifetime;
 pub mod mesh;
 pub mod position;
 pub mod rigid_body;
+pub mod shooting;
 
+pub use bounds::*;
 pub use controllable::*;
+pub use explode_bounds::*;
+pub use garbage::*;
+pub use lifetime::*;
 pub use mesh::*;
 pub use position::*;
 pub use rigid_body::*;
+pub use shooting::*;

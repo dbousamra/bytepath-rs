@@ -22,7 +22,6 @@ impl<'a> System<'a> for PositionSystem {
       let rb_position = body.position().translation;
       position.x = rb_position.x;
       position.y = rb_position.y;
-
       position.angle = body.position().rotation.angle();
     }
   }
