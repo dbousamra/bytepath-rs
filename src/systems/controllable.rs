@@ -1,22 +1,26 @@
+use specs::world::*;
 use specs::*;
 
 use nalgebra::{Isometry2, Vector2};
 use nphysics2d::object::{BodyHandle, RigidBody};
 
 use crate::components::*;
+use crate::entities::*;
 use crate::resources::*;
 
 pub struct ControllableSystem;
 
 impl<'a> System<'a> for ControllableSystem {
   type SystemData = (
+    Read<'a, EntitiesRes>,
+    Read<'a, LazyUpdate>,
     Read<'a, Input>,
     Write<'a, PhysicsWorld>,
     WriteStorage<'a, RigidBodyComponent>,
     ReadStorage<'a, ControllableComponent>,
   );
 
-  fn run(&mut self, (input, mut physics_world, mut rb, ctrled): Self::SystemData) {
+  fn run(&mut self, (entities, lazy, input, mut physics_world, mut rb, ctrled): Self::SystemData) {
     (&mut rb, &ctrled).join().for_each(|(rb, _ctrled)| {
       let body: &mut RigidBody<f32> = physics_world
         .rigid_body_mut(rb.handle)
@@ -36,6 +40,10 @@ impl<'a> System<'a> for ControllableSystem {
 
       body.set_position(Isometry2::new(Vector2::new(pos.x, pos.y), new_angle));
       body.set_linear_velocity(Vector2::new(new_angle.cos() * v, new_angle.sin() * v));
+
+      if input.attack {
+        create_death_explosion(&entities, &lazy, &mut physics_world, pos.x, pos.y);
+      }
     });
   }
 }

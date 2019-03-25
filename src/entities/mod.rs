@@ -9,6 +9,7 @@ use nalgebra::{Isometry2, Vector2};
 use ncollide2d::shape::{Ball, ShapeHandle};
 use nphysics2d::math::Velocity;
 use nphysics2d::object::{BodyHandle, BodyStatus, ColliderDesc, RigidBodyDesc};
+use rand::Rng;
 use specs::world::*;
 use specs::*;
 use std::time::{Duration, Instant};
@@ -198,6 +199,68 @@ pub fn create_out_of_bounds_explosion(
     lazy: lazy,
   }
   .with(position_component)
+  .with(mesh_component)
+  .with(lifetime_component)
+  .with(garbage_component)
+  .build()
+}
+
+pub fn create_death_explosion(
+  entities: &EntitiesRes,
+  lazy: &LazyUpdate,
+  physics_world: &mut PhysicsWorld,
+  x: f32,
+  y: f32,
+) -> Entity {
+  let mut rng = rand::thread_rng();
+
+  let angle = rng.gen_range(0.0, 2.0 * std::f32::consts::PI);
+  let length = rng.gen_range(10.0, 50.0);
+  let velocity = rng.gen_range(75.0, 150.0);
+  let line_width = 2.0;
+
+  let position_component = PositionComponent { x, y, angle };
+
+  let rigid_body = RigidBodyDesc::new()
+    .position(Isometry2::new(Vector2::new(x, y), angle))
+    .status(BodyStatus::Dynamic)
+    .build(physics_world);
+
+  rigid_body.set_linear_velocity(Vector2::new(angle.cos() * velocity, angle.sin() * velocity));
+
+  let rigid_body_component = RigidBodyComponent {
+    handle: rigid_body.handle(),
+  };
+
+  let mesh = graphics::MeshBuilder::new()
+    .line(
+      &[
+        graphics::Point2::origin(),
+        graphics::Point2::new(length, 0.0),
+      ],
+      line_width,
+    )
+    .clone();
+
+  let draw_param = graphics::DrawParam {
+    color: Some(HP_COLOR()),
+    ..Default::default()
+  };
+
+  let mesh_component = MeshComponent { mesh, draw_param };
+
+  let lifetime_component = LifetimeComponent {
+    duration: Duration::from_millis(4000),
+  };
+
+  let garbage_component = GarbageComponent::default();
+
+  LazyBuilder {
+    entity: entities.create(),
+    lazy: lazy,
+  }
+  .with(position_component)
+  .with(rigid_body_component)
   .with(mesh_component)
   .with(lifetime_component)
   .with(garbage_component)
