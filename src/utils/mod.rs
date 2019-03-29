@@ -1,15 +1,15 @@
 use ggez::graphics;
 
-pub fn BACKROUND_COLOR() -> graphics::Color {
+pub fn backround_color() -> graphics::Color {
   graphics::Color::from_rgb(16, 16, 16)
 }
-pub fn AMMO_COLOR() -> graphics::Color {
+pub fn ammo_color() -> graphics::Color {
   graphics::Color::from_rgb(123, 200, 164)
 }
-pub fn BOOST_COLOR() -> graphics::Color {
+pub fn boost_color() -> graphics::Color {
   graphics::Color::from_rgb(76, 195, 217)
 }
-pub fn HP_COLOR() -> graphics::Color {
+pub fn hp_color() -> graphics::Color {
   graphics::Color::from_rgb(241, 103, 69)
 }
 

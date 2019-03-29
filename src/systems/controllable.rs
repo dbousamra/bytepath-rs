@@ -1,8 +1,8 @@
-use specs::world::*;
-use specs::*;
-
 use nalgebra::{Isometry2, Vector2};
 use nphysics2d::object::{BodyHandle, RigidBody};
+use rand::Rng;
+use specs::world::*;
+use specs::*;
 
 use crate::components::*;
 use crate::entities::*;
@@ -41,8 +41,12 @@ impl<'a> System<'a> for ControllableSystem {
       body.set_position(Isometry2::new(Vector2::new(pos.x, pos.y), new_angle));
       body.set_linear_velocity(Vector2::new(new_angle.cos() * v, new_angle.sin() * v));
 
+      let mut rng = rand::thread_rng();
+
       if input.attack {
-        create_death_explosion(&entities, &lazy, &mut physics_world, pos.x, pos.y);
+        for _ in 0..rng.gen_range(8, 12) {
+          create_death_explosion(&entities, &lazy, &mut physics_world, pos.x, pos.y);
+        }
       }
     });
   }

@@ -1,4 +1,5 @@
 pub mod bounds;
+pub mod collision;
 pub mod controllable;
 pub mod garbage;
 pub mod lifetime;
@@ -6,8 +7,11 @@ pub mod physics;
 pub mod position;
 pub mod rendering;
 pub mod shooting;
+pub mod spawn;
+pub mod tween;
 
 pub use bounds::*;
+pub use collision::*;
 pub use controllable::*;
 pub use garbage::*;
 pub use lifetime::*;
@@ -15,3 +19,5 @@ pub use physics::*;
 pub use position::*;
 pub use rendering::*;
 pub use shooting::*;
+pub use spawn::*;
+pub use tween::*;

@@ -11,23 +11,20 @@ pub struct RenderingSystem<'a> {
 
 impl<'a> System<'a> for RenderingSystem<'a> {
   type SystemData = (
-    Read<'a, GameSettings>,
     ReadStorage<'a, MeshComponent>,
     ReadStorage<'a, PositionComponent>,
   );
 
-  fn run(&mut self, (game_settings, mesh, position): Self::SystemData) {
-    use specs::Join;
+  fn run(&mut self, (mesh, position): Self::SystemData) {
     for (mesh, position) in (&mesh, &position).join() {
       let drawable: graphics::Mesh = mesh.mesh.build(self.ctx).unwrap();
       let dest = ggez::graphics::Point2::new(position.x, position.y);
       let angle = position.angle;
-      let scale = graphics::Point2::new(game_settings.scale as f32, game_settings.scale as f32);
 
       let draw_param = graphics::DrawParam {
         dest: dest,
         rotation: angle,
-        scale: scale,
+        scale: mesh.draw_param.scale,
         src: mesh.draw_param.src,
         offset: mesh.draw_param.offset,
         shear: mesh.draw_param.shear,

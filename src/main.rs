@@ -3,15 +3,14 @@
 
 extern crate ggez;
 extern crate nalgebra;
-
 use ggez::conf::{NumSamples, WindowMode, WindowSetup};
 use ggez::event::*;
 use ggez::graphics::Canvas;
 use ggez::*;
 use ggez::{Context, GameResult};
-
 use nalgebra::Vector2;
 use nphysics2d::solver::SignoriniModel;
+use shrev::EventChannel;
 use specs::prelude::*;
 use specs::{RunNow, World};
 
@@ -49,27 +48,24 @@ impl<'a, 'b> MainState<'a, 'b> {
 
     let mut specs_world = World::new();
 
-    let mut physics_world = PhysicsWorld::new();
-    physics_world.set_gravity(Vector2::new(0.0, 0.0));
-    physics_world.set_contact_model(SignoriniModel::new());
+    // let mut physics_world = PhysicsWorld::new();
+    // physics_world.set_gravity(Vector2::new(0.0, 0.0));
+    // physics_world.set_contact_model(SignoriniModel::new());
 
-    specs_world.add_resource(UpdateTime::default());
-    specs_world.add_resource(Input::default());
-    specs_world.add_resource(physics_world);
-    specs_world.add_resource(game_settings);
+    // specs_world.add_resource(UpdateTime::default());
+    // specs_world.add_resource(Input::default());
+    // specs_world.add_resource(SpawnInfo::default());
+    // specs_world.add_resource(physics_world);
+    // specs_world.add_resource(EventChannel::<bool>::new());
+    // specs_world.add_resource(game_settings);
 
-    specs_world.register::<BoundsComponent>();
-    specs_world.register::<ControllableComponent>();
-    specs_world.register::<ExplodeBoundsComponent>();
-    specs_world.register::<LifetimeComponent>();
-    specs_world.register::<GarbageComponent>();
-    specs_world.register::<MeshComponent>();
-    specs_world.register::<PositionComponent>();
-    specs_world.register::<RigidBodyComponent>();
-    specs_world.register::<ShootingComponent>();
-
-    let dispatcher = DispatcherBuilder::new()
+    let mut dispatcher = DispatcherBuilder::new()
       .with(PhysicsSystem, "physics_system", &[])
+      .with(
+        CollisionSystem::default(),
+        "collision_system",
+        &["physics_system"],
+      )
       .with(PositionSystem, "position_system", &["physics_system"])
       .with(
         ControllableSystem,
@@ -80,7 +76,11 @@ impl<'a, 'b> MainState<'a, 'b> {
       .with(BoundsSystem, "bounds_system", &["position_system"])
       .with(GarbageSystem, "garbage_system", &[])
       .with(LifetimeSystem, "lifetime_system", &[])
+      .with(TweenSystem, "tween_system", &[])
+      .with(SpawnSystem, "spawn_system", &[])
       .build();
+
+    dispatcher.setup(&mut specs_world.res);
 
     // I don't know what I'm doing. Is this needed?
     {
@@ -124,7 +124,7 @@ impl<'a, 'b> event::EventHandler for MainState<'a, 'b> {
     let game_settings = self.specs_world.read_resource::<GameSettings>();
 
     graphics::set_canvas(ctx, Some(&self.canvas));
-    graphics::set_background_color(ctx, utils::BACKROUND_COLOR());
+    graphics::set_background_color(ctx, utils::backround_color());
     graphics::clear(ctx);
 
     {

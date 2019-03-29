@@ -15,14 +15,12 @@ impl<'a> System<'a> for PositionSystem {
 
   fn run(&mut self, (mut physics_world, rb, mut position): Self::SystemData) {
     for (rb, position) in (&rb, &mut position).join() {
-      let body: &mut RigidBody<f32> = physics_world
-        .rigid_body_mut(rb.handle)
-        .expect("Rigid body in specs does not exist in physics world");
-
-      let rb_position = body.position().translation;
-      position.x = rb_position.x;
-      position.y = rb_position.y;
-      position.angle = body.position().rotation.angle();
+      if let Some(body) = physics_world.rigid_body_mut(rb.handle) {
+        let rb_position = body.position().translation;
+        position.x = rb_position.x;
+        position.y = rb_position.y;
+        position.angle = body.position().rotation.angle();
+      }
     }
   }
 }
