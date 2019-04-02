@@ -4,7 +4,6 @@ use crate::resources::*;
 
 use nphysics2d::object::{Collider, RigidBody};
 use nphysics2d::world::ColliderWorld;
-use rand::Rng;
 use specs::world::*;
 use specs::*;
 use std::time::Instant;
@@ -18,26 +17,22 @@ impl<'a> System<'a> for CollisionSystem {
   type SystemData = (
     Read<'a, EntitiesRes>,
     Read<'a, LazyUpdate>,
-    Write<'a, PhysicsWorld>,
+    Write<'a, PhysicsSim>,
     Read<'a, CollisionEvents>,
+    WriteStorage<'a, GarbageComponent>,
   );
 
-  fn run(&mut self, (entities, lazy, mut physics_world, collision_events): Self::SystemData) {
+  fn run(
+    &mut self,
+    (entities, lazy, mut physics, collision_events, mut garbage): Self::SystemData,
+  ) {
     for event in collision_events.read(&mut self.reader.as_mut().unwrap()) {
-      let mut rng = rand::thread_rng();
-
-      match (&event.collider1, &event.collider2) {
-        (ColliderType::Player, ColliderType::Ammo) | (ColliderType::Ammo, ColliderType::Player) => {
-          println!("Player and ammmo collided")
+      match event.collision_type {
+        CollisionType::PlayerAmmo { player: _, ammo } => {
+          garbage.get_mut(ammo).map(|g| g.is_alive = false);
+          create_death_explosion(&entities, &lazy, &mut physics, event.x, event.y)
         }
-        (ColliderType::PlayerProjectile, ColliderType::Ammo)
-        | (ColliderType::Ammo, ColliderType::PlayerProjectile) => {
-          for _ in 0..rng.gen_range(4, 20) {
-            create_death_explosion(&entities, &lazy, &mut physics_world, event.x, event.y)
-          }
-        }
-        _ => {}
-      };
+      }
     }
   }
 

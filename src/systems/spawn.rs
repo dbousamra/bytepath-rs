@@ -15,18 +15,21 @@ impl<'a> System<'a> for SpawnSystem {
     Read<'a, LazyUpdate>,
     Read<'a, GameSettings>,
     Write<'a, SpawnInfo>,
-    Write<'a, PhysicsWorld>,
+    Write<'a, PhysicsSim>,
   );
 
   fn run(
     &mut self,
-    (entities, lazy, game_settings, mut spawn_info, mut physics_world): Self::SystemData,
+    (entities, lazy, game_settings, mut spawn_info, mut physics): Self::SystemData,
   ) {
     let now = Instant::now();
 
-    if now.duration_since(spawn_info.ammo_last) > spawn_info.ammo_every {
-      create_ammo(&entities, &lazy, &game_settings, &mut physics_world);
+    if now.duration_since(spawn_info.ammo_last) > spawn_info.ammo_every
+      && spawn_info.ammo_count < spawn_info.ammo_max
+    {
+      create_ammo(&entities, &lazy, &game_settings, &mut physics);
       spawn_info.ammo_last = now;
+      spawn_info.ammo_count += 1;
     }
   }
 }

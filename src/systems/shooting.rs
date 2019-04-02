@@ -13,7 +13,7 @@ impl<'a> System<'a> for ShootingSystem {
     Read<'a, EntitiesRes>,
     Read<'a, LazyUpdate>,
     Read<'a, GameSettings>,
-    Write<'a, PhysicsWorld>,
+    Write<'a, PhysicsSim>,
     ReadStorage<'a, PositionComponent>,
     WriteStorage<'a, ShootingComponent>,
   );

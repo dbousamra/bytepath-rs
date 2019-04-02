@@ -12,18 +12,18 @@ pub struct PhysicsSystem;
 impl<'a> System<'a> for PhysicsSystem {
   type SystemData = (
     Read<'a, UpdateTime>,
-    Write<'a, PhysicsWorld>,
+    Write<'a, PhysicsSim>,
     Write<'a, CollisionEvents>,
   );
 
-  fn run(&mut self, (update_time, mut physics_world, mut collision_events): Self::SystemData) {
+  fn run(&mut self, (update_time, mut physics, mut collision_events): Self::SystemData) {
     // Step physics world
     let dt_seconds = update_time.0.subsec_nanos() as f32 / 1_000_000_000.0;
-    physics_world.set_timestep(dt_seconds);
-    physics_world.step();
+    physics.world.set_timestep(dt_seconds);
+    physics.world.step();
 
     // Resolve collisions and create collision events
-    let collider_world: &ColliderWorld<f32> = physics_world.collider_world();
+    let collider_world: &ColliderWorld<f32> = physics.world.collider_world();
 
     let contact_events = collider_world.contact_events();
 
@@ -38,19 +38,47 @@ impl<'a> System<'a> for PhysicsSystem {
       .collect();
 
     for (collider1, collider2) in colliders {
-      if let Some(body) = physics_world.rigid_body(collider2.body()) {
-        let rb_position = body.position().translation;
+      let collider1_body_handle = collider1.body();
+      let collider2_body_handle = collider2.body();
 
-        let collider_type_1 = collider1.name().parse::<ColliderType>().unwrap();
-        let collider_type_2 = collider2.name().parse::<ColliderType>().unwrap();
+      let collider1_entity = physics.bodies.get(&collider1_body_handle);
+      let collider2_entity = physics.bodies.get(&collider2_body_handle);
 
-        collision_events.single_write(CollisionEvent {
-          collider1: collider_type_1,
-          collider2: collider_type_2,
-          x: rb_position.x,
-          y: rb_position.y,
-        })
-      }
+      let joined = (
+        collider1_entity,
+        collider2_entity,
+        physics.world.rigid_body(collider2_body_handle),
+      );
+
+      match joined {
+        (Some(e1), Some(e2), Some(body)) => {
+          let rb_position = body.position().translation;
+
+          let collider_type_1 = collider1.name().parse::<ColliderType>().unwrap();
+          let collider_type_2 = collider2.name().parse::<ColliderType>().unwrap();
+
+          let collision_type = match (collider_type_1, collider_type_2) {
+            (ColliderType::Player, ColliderType::Ammo) => Some(CollisionType::PlayerAmmo {
+              player: *e1,
+              ammo: *e2,
+            }),
+            (ColliderType::Ammo, ColliderType::Player) => Some(CollisionType::PlayerAmmo {
+              player: *e2,
+              ammo: *e1,
+            }),
+            (_, _) => None,
+          };
+
+          if let Some(ct) = collision_type {
+            collision_events.single_write(CollisionEvent {
+              collision_type: ct,
+              x: rb_position.x,
+              y: rb_position.y,
+            })
+          }
+        }
+        (_, _, _) => {}
+      };
     }
   }
 }

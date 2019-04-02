@@ -20,7 +20,7 @@ pub fn create_player(
   entities: &EntitiesRes,
   lazy: &LazyUpdate,
   game_settings: &GameSettings,
-  physics_world: &mut PhysicsWorld,
+  physics: &mut PhysicsSim,
 ) -> () {
   let x = game_settings.width as f32 / 2.0;
   let y = game_settings.height as f32 / 2.0;
@@ -36,14 +36,14 @@ pub fn create_player(
     .collision_groups(collision_groups)
     .name(ColliderType::Player.to_string());;
 
-  collider_desc.build(physics_world);
+  collider_desc.build(&mut physics.world);
 
   let rigid_body_handle = RigidBodyDesc::new()
     .collider(&collider_desc)
     .position(Isometry2::new(Vector2::new(x, y), angle))
     .velocity(Velocity::linear(velocity, 0.0))
     .status(BodyStatus::Dynamic)
-    .build(physics_world)
+    .build(&mut physics.world)
     .handle();
 
   let rigid_body_component = RigidBodyComponent {
@@ -99,7 +99,7 @@ pub fn create_player(
 
   let garbage_component = GarbageComponent::default();
 
-  LazyBuilder {
+  let entity = LazyBuilder {
     entity: entities.create(),
     lazy: lazy,
   }
@@ -110,67 +110,15 @@ pub fn create_player(
   .with(shooting_component)
   .with(garbage_component)
   .build();
-}
 
-pub fn create_player_trail_particles(
-  _ctx: &mut Context,
-  entities: &EntitiesRes,
-  lazy: &LazyUpdate,
-  physics_world: &mut PhysicsWorld,
-  position_component: PositionComponent,
-) -> () {
-  let x = position_component.x;
-  let y = position_component.y;
-  let velocity = 0.0;
-  let angle = 0.5;
-  let size = 25.0;
-  let radius = 5.0;
-
-  let cuboid = ShapeHandle::new(Ball::new(size));
-  let collider_desc = ColliderDesc::new(cuboid);
-  let rigid_body_handle = RigidBodyDesc::new()
-    .collider(&collider_desc)
-    .position(Isometry2::new(Vector2::new(x, y), angle))
-    .velocity(Velocity::linear(velocity, 0.0))
-    .status(BodyStatus::Dynamic)
-    .build(physics_world)
-    .handle();
-
-  let rigid_body_component = RigidBodyComponent {
-    handle: rigid_body_handle,
-  };
-
-  let mesh = graphics::MeshBuilder::new()
-    .circle(
-      graphics::DrawMode::Line(1.0),
-      graphics::Point2::origin(),
-      radius,
-      0.1,
-    )
-    .clone();
-
-  let draw_param = graphics::DrawParam::default();
-
-  let mesh_component = MeshComponent { mesh, draw_param };
-
-  let garbage_component = GarbageComponent::default();
-
-  LazyBuilder {
-    entity: entities.create(),
-    lazy: lazy,
-  }
-  .with(position_component)
-  .with(mesh_component)
-  .with(rigid_body_component)
-  .with(garbage_component)
-  .build();
+  physics.bodies.insert(rigid_body_handle, entity);
 }
 
 pub fn create_projectile(
   entities: &EntitiesRes,
   lazy: &LazyUpdate,
   settings: &GameSettings,
-  physics_world: &mut PhysicsWorld,
+  physics: &mut PhysicsSim,
   position_component: PositionComponent,
 ) -> () {
   let x = position_component.x;
@@ -190,13 +138,13 @@ pub fn create_projectile(
     .collision_groups(collision_groups)
     .name(ColliderType::PlayerProjectile.to_string());;
 
-  collider_desc.build(physics_world);
+  collider_desc.build(&mut physics.world);
 
   let rigid_body = RigidBodyDesc::new()
     .collider(&collider_desc)
     .position(Isometry2::new(Vector2::new(x, y), angle))
     .status(BodyStatus::Dynamic)
-    .build(physics_world);
+    .build(&mut physics.world);
 
   rigid_body.set_linear_velocity(Vector2::new(angle.cos() * velocity, angle.sin() * velocity));
 
@@ -228,7 +176,7 @@ pub fn create_projectile(
 
   let explode_bounds_component = ExplodeBoundsComponent;
 
-  LazyBuilder {
+  let entity = LazyBuilder {
     entity: entities.create(),
     lazy: lazy,
   }
@@ -239,6 +187,8 @@ pub fn create_projectile(
   .with(bounds_component)
   .with(explode_bounds_component)
   .build();
+
+  physics.bodies.insert(rigid_body.handle(), entity);
 }
 
 pub fn create_out_of_bounds_explosion(
@@ -261,7 +211,7 @@ pub fn create_out_of_bounds_explosion(
 
   let lifetime_component = LifetimeComponent {
     duration: Duration::from_millis(250),
-  };;
+  };
 
   let garbage_component = GarbageComponent::default();
 
@@ -279,81 +229,85 @@ pub fn create_out_of_bounds_explosion(
 pub fn create_death_explosion(
   entities: &EntitiesRes,
   lazy: &LazyUpdate,
-  physics_world: &mut PhysicsWorld,
+  physics: &mut PhysicsSim,
   x: f32,
   y: f32,
 ) -> () {
   let mut rng = rand::thread_rng();
 
-  let angle = rng.gen_range(0.0, 2.0 * std::f32::consts::PI);
-  let length = rng.gen_range(15.0, 30.0);
-  let velocity = rng.gen_range(30.0, 300.0);
-  let line_width = 2.0;
+  let count = rng.gen_range(4, 30);
 
-  let position_component = PositionComponent { x, y, angle };
+  for _ in 0..count {
+    let angle = rng.gen_range(0.0, 2.0 * std::f32::consts::PI);
+    let length = rng.gen_range(15.0, 30.0);
+    let velocity = rng.gen_range(100.0, 300.0);
+    let line_width = 2.0;
 
-  let rigid_body = RigidBodyDesc::new()
-    .position(Isometry2::new(Vector2::new(x, y), angle))
-    .status(BodyStatus::Dynamic)
-    .build(physics_world);
+    let position_component = PositionComponent { x, y, angle };
 
-  rigid_body.set_linear_velocity(Vector2::new(angle.cos() * velocity, angle.sin() * velocity));
+    let rigid_body = RigidBodyDesc::new()
+      .position(Isometry2::new(Vector2::new(x, y), angle))
+      .status(BodyStatus::Dynamic)
+      .build(&mut physics.world);
 
-  let rigid_body_component = RigidBodyComponent {
-    handle: rigid_body.handle(),
-  };
+    rigid_body.set_linear_velocity(Vector2::new(angle.cos() * velocity, angle.sin() * velocity));
 
-  let mesh = graphics::MeshBuilder::new()
-    .line(
-      &[
-        graphics::Point2::origin(),
-        graphics::Point2::new(length, 0.0),
-      ],
-      line_width,
-    )
-    .clone();
+    let rigid_body_component = RigidBodyComponent {
+      handle: rigid_body.handle(),
+    };
 
-  let draw_param = graphics::DrawParam {
-    color: Some(hp_color()),
-    ..Default::default()
-  };
+    let mesh = graphics::MeshBuilder::new()
+      .line(
+        &[
+          graphics::Point2::origin(),
+          graphics::Point2::new(length, 0.0),
+        ],
+        line_width,
+      )
+      .clone();
 
-  let mesh_component = MeshComponent { mesh, draw_param };
+    let draw_param = graphics::DrawParam {
+      color: Some(hp_color()),
+      ..Default::default()
+    };
 
-  let tween_component = TweenComponent {
-    tween_type: Tween::SizeTween {
-      ease: Ease::Cubic,
-      starting: 1.0,
-      ending: 0.0,
-    },
-    elapsed: Duration::from_millis(0),
-    duration: Duration::from_millis(250),
-  };
+    let mesh_component = MeshComponent { mesh, draw_param };
 
-  let lifetime_component = LifetimeComponent {
-    duration: Duration::from_millis(250),
-  };
+    let tween_component = TweenComponent {
+      tween_type: Tween::SizeTween {
+        ease: Ease::Cubic,
+        starting: 1.0,
+        ending: 0.0,
+      },
+      elapsed: Duration::from_millis(0),
+      duration: Duration::from_millis(1000),
+    };
 
-  let garbage_component = GarbageComponent::default();
+    let lifetime_component = LifetimeComponent {
+      duration: Duration::from_millis(1000),
+    };
 
-  LazyBuilder {
-    entity: entities.create(),
-    lazy: lazy,
+    let garbage_component = GarbageComponent::default();
+
+    let entity = LazyBuilder {
+      entity: entities.create(),
+      lazy: lazy,
+    }
+    .with(position_component)
+    .with(rigid_body_component)
+    .with(mesh_component)
+    .with(tween_component)
+    .with(lifetime_component)
+    .with(garbage_component)
+    .build();
   }
-  .with(position_component)
-  .with(rigid_body_component)
-  .with(mesh_component)
-  .with(tween_component)
-  .with(lifetime_component)
-  .with(garbage_component)
-  .build();
 }
 
 pub fn create_ammo(
   entities: &EntitiesRes,
   lazy: &LazyUpdate,
   settings: &GameSettings,
-  physics_world: &mut PhysicsWorld,
+  physics: &mut PhysicsSim,
 ) -> () {
   let mut rng = rand::thread_rng();
 
@@ -375,13 +329,13 @@ pub fn create_ammo(
     .collision_groups(collision_groups)
     .name(ColliderType::Ammo.to_string());
 
-  collider_desc.build(physics_world);
+  collider_desc.build(&mut physics.world);
 
   let rigid_body = RigidBodyDesc::new()
     .collider(&collider_desc)
     .position(Isometry2::new(Vector2::new(x, y), angle))
     .status(BodyStatus::Dynamic)
-    .build(physics_world);
+    .build(&mut physics.world);
 
   rigid_body.set_linear_velocity(Vector2::new(velocity, 0.0));
   rigid_body.set_angular_velocity(2.0);
@@ -411,7 +365,7 @@ pub fn create_ammo(
     y_max: settings.height as f32,
   };
 
-  LazyBuilder {
+  let entity = LazyBuilder {
     entity: entities.create(),
     lazy: lazy,
   }
@@ -421,4 +375,6 @@ pub fn create_ammo(
   .with(garbage_component)
   .with(bounds_component)
   .build();
+
+  physics.bodies.insert(rigid_body.handle(), entity);
 }

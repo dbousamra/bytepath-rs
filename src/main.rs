@@ -48,17 +48,6 @@ impl<'a, 'b> MainState<'a, 'b> {
 
     let mut specs_world = World::new();
 
-    // let mut physics_world = PhysicsWorld::new();
-    // physics_world.set_gravity(Vector2::new(0.0, 0.0));
-    // physics_world.set_contact_model(SignoriniModel::new());
-
-    // specs_world.add_resource(UpdateTime::default());
-    // specs_world.add_resource(Input::default());
-    // specs_world.add_resource(SpawnInfo::default());
-    // specs_world.add_resource(physics_world);
-    // specs_world.add_resource(EventChannel::<bool>::new());
-    // specs_world.add_resource(game_settings);
-
     let mut dispatcher = DispatcherBuilder::new()
       .with(PhysicsSystem, "physics_system", &[])
       .with(
@@ -85,14 +74,14 @@ impl<'a, 'b> MainState<'a, 'b> {
     // I don't know what I'm doing. Is this needed?
     {
       let lazy = specs_world.read_resource::<LazyUpdate>();
-      let mut physics_world = specs_world.write_resource::<PhysicsWorld>();
+      let mut physics = specs_world.write_resource::<PhysicsSim>();
       let game_settings = specs_world.read_resource::<GameSettings>();
       entities::create_player(
         ctx,
         &specs_world.entities(),
         &lazy,
         &game_settings,
-        &mut physics_world,
+        &mut physics,
       );
     }
 
@@ -113,8 +102,9 @@ impl<'a, 'b> event::EventHandler for MainState<'a, 'b> {
     }
 
     self.specs_world.write_resource::<UpdateTime>().0 = dt;
-    self.specs_world.write_resource::<PhysicsWorld>();
+    self.specs_world.write_resource::<PhysicsSim>();
     self.dispatcher.dispatch(&mut self.specs_world.res);
+
     self.specs_world.maintain();
 
     Ok(())
